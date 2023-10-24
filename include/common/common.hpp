@@ -337,6 +337,7 @@ struct Args
   bool rle   = false; // outpt RLBWT
   std::string patterns = ""; // path to patterns file
   bool is_fasta = false; // read a fasta file
+  size_t maxLF = 5; // sparseness of the suffix array
 };
 
 void parseArgs(int argc, char *const argv[], Args &arg)
@@ -345,7 +346,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-g grammar] [-t thr_lce] [-b bytes]\n\n" +
+    std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-g grammar] [-t thr_lce] [-b bytes] [-l lfmax]\n\n" +
                     "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
                     "  wsize: [integer] - sliding window size (def. 10)\n" +
                     "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
@@ -356,10 +357,12 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "grammar: [string]  - options for the grammar.\n" +
                     "thr_lce: [string]  - options for storing the thr_lce.\n" +
                     "  bytes: [integer] - how many bytes for storing the thr_lce.\n" +
-                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n" + 
+                    "  lfmax: [integer] - maximum allowed LF steps for suffix array access. (def. 5)\n"
+                    );
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfrhp:g:t:b:")) != -1)
+  while ((c = getopt(argc, argv, "w:smcfrhp:g:t:b:l:")) != -1)
   {
     switch (c)
     {
@@ -395,6 +398,16 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'f':
       arg.is_fasta = true;
       break;
+    case 'l':
+    {
+      sarg.assign(optarg);
+      int maxLF = stoi(sarg);
+      if (maxLF < 0) {
+        error("Invalid value for maxLF\n", usage);
+      }
+      arg.maxLF = static_cast<size_t>(maxLF);
+      break;
+    }
     case 'h':
       error(usage);
     case '?':

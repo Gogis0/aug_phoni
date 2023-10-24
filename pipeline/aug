@@ -77,7 +77,10 @@ build_phoni_exe         = os.path.join(phoni_dirname, "build_phoni")
 phoni_query_exe         = os.path.join(phoni_dirname, "phoni")
 
 build_aug_exe         = os.path.join(phoni_dirname, "build_aug")
-aug_query_exe         = os.path.join(phoni_dirname, "aug_phoni")
+aug_query_exe         = os.path.join(phoni_dirname, "aug_phoni_lazy")
+
+subsampling_sa_exe         = os.path.join(phoni_dirname, "subsampling_sa")
+test_subsampling_sa_exe         = os.path.join(phoni_dirname, "test_subsampling_sa")
 
 class PFPthresholds(threading.Thread):
     def __init__(self, name, counter, args):
@@ -358,6 +361,53 @@ class BWT(threading.Thread):
       print("BWT Elapsed time: {0:.4f}".format(time.time()-start))      
 
 
+
+class SA_subsampling(threading.Thread):
+  def __init__(self, name, counter, args):
+        threading.Thread.__init__(self)
+        self.threadID = counter
+        self.name = name
+        self.counter = counter
+        self.args = args
+
+  def run(self):
+      args = self.args
+      logfile = args.logfile
+      logfile_name = args.logfile_name
+      print("{} SA subsampling started!".format(self.getName()))        # "Thread-x started!"
+
+      # ----------- computation of the BWT of the parsing
+      start = time.time()
+      command = "{exe} {file} -l {maxLF}".format(
+              exe = os.path.join(args.exe_dir, subsampling_sa_exe), file=args.reference, maxLF=args.lfmax)
+      print("==== Subsampling the suffix array. Command:", command)
+      if(execute_command(command,logfile,logfile_name)!=True):
+        return
+      print("Elapsed time: {0:.4f}".format(time.time()-start)); 
+class test_SA_subsampling(threading.Thread):
+  def __init__(self, name, counter, args):
+        threading.Thread.__init__(self)
+        self.threadID = counter
+        self.name = name
+        self.counter = counter
+        self.args = args
+
+  def run(self):
+      args = self.args
+      logfile = args.logfile
+      logfile_name = args.logfile_name
+      print("{} testing SA subsampling started!".format(self.getName()))        # "Thread-x started!"
+
+      # ----------- computation of the BWT of the parsing
+      start = time.time()
+      command = "{exe} {file} -l {maxLF}".format(
+              exe = os.path.join(args.exe_dir, test_subsampling_sa_exe), file=args.reference, maxLF=args.lfmax)
+      print("==== Verifying the subsampled suffix array. Command:", command)
+      if(execute_command(command,logfile,logfile_name)!=True):
+        return
+      print("Elapsed time: {0:.4f}".format(time.time()-start)); 
+
+
 class build_phoni(threading.Thread):
   def __init__(self, name, counter, args):
       threading.Thread.__init__(self)
@@ -379,8 +429,8 @@ class build_phoni(threading.Thread):
       parse_size = os.path.getsize(args.reference+".parse")/4
       dictionary_size = os.path.getsize(args.reference+".dict")
 
-      command = "{exe} {file}".format(exe=os.path.join(
-          args.exe_dir, build_aug_exe), file=args.reference)
+      command = "{exe} {file} -l {lfmax}".format(exe=os.path.join(
+          args.exe_dir, build_aug_exe), file=args.reference, lfmax=args.lfmax)
 
       print("==== Building Aug-PHONI. Command:", command, flush=True)
       if(execute_command(command, logfile, logfile_name) != True):
@@ -404,7 +454,7 @@ def build(args):
   args.bigbwt_dir = os.path.split(sys.argv[0])[0]
   args.exe_dir = os.path.split(sys.argv[0])[0]
   print("Sending logging messages to file:", logfile_name)
-  with open(logfile_name,"a") as logfile:
+  with open(logfile_name,"w") as logfile:
     args.logfile = logfile
     args.logfile_name = logfile_name
     # ---------- parsing of the input file
@@ -459,21 +509,30 @@ def build(args):
     bigbwt_thread.start()                                       # ...Start the thread, invoke the run method
     bigbwt_thread.join()
 
-    pf_thresholds_thread = PFPthresholds(name = "{}".format(args.reference), args=args, counter=2)  # ...Instantiate a thread and pass a unique ID to it
+    subsampling_sa_thread = SA_subsampling(name = "{}".format(args.reference), args=args, counter=2)  # ...Instantiate a thread and pass a unique ID to it
+    subsampling_sa_thread.start()                                       # ...Start the thread, invoke the run method
+    subsampling_sa_thread.join()
+
+    pf_thresholds_thread = PFPthresholds(name = "{}".format(args.reference), args=args, counter=3)  # ...Instantiate a thread and pass a unique ID to it
     pf_thresholds_thread.start()                                       # ...Start the thread, invoke the run method
     pf_thresholds_thread.join()
 
-    bigrepair_thread = bigrepair(name = "{}".format(args.reference), args=args, counter=3)  # ...Instantiate a thread and pass a unique ID to it
+    bigrepair_thread = bigrepair(name = "{}".format(args.reference), args=args, counter=4)  # ...Instantiate a thread and pass a unique ID to it
     bigrepair_thread.start()                                       # ...Start the thread, invoke the run method
     bigrepair_thread.join()
 
-    SLP_thread = SLP(name = "{}".format(args.reference), args=args, counter=3)  # ...Instantiate a thread and pass a unique ID to it
+    SLP_thread = SLP(name = "{}".format(args.reference), args=args, counter=5)  # ...Instantiate a thread and pass a unique ID to it
     SLP_thread.start()                                       # ...Start the thread, invoke the run method
     SLP_thread.join()
     
-    phoni_thread = build_phoni(name = "{}".format(args.reference), args=args, counter=4)  # ...Instantiate a thread and pass a unique ID to it
+    phoni_thread = build_phoni(name = "{}".format(args.reference), args=args, counter=6)  # ...Instantiate a thread and pass a unique ID to it
     phoni_thread.start()                                       # ...Start the thread, invoke the run method
     phoni_thread.join()
+
+    # # For debugging purposes, comment out in final version
+    # subsampling_sa_thread = test_SA_subsampling(name = "{}".format(args.reference), args=args, counter=7)  # ...Instantiate a thread and pass a unique ID to it
+    # subsampling_sa_thread.start()                                       # ...Start the thread, invoke the run method
+    # subsampling_sa_thread.join()
 
 
 
@@ -498,11 +557,11 @@ def query(args):
   # get main bigbwt directory
   args.exe_dir = os.path.split(sys.argv[0])[0]
   print("Sending logging messages to file:", logfile_name, flush=True)
-  with open(logfile_name, "a") as logfile:
+  with open(logfile_name, "w") as logfile:
     exe_name = "AUGPHONI"
-    command = "{exe} {file} -p {query} -g {grammar}".format(exe=os.path.join(
+    command = "{exe} {file} -p {query} -g {grammar} -l {lfmax}".format(exe=os.path.join(
         args.exe_dir, aug_query_exe), file=args.index,
-        query=args.pattern, grammar=args.grammar)
+        query=args.pattern, grammar=args.grammar, lfmax=args.lfmax)
 
     start = time.time()
 
@@ -550,6 +609,7 @@ def main():
   build_parser.add_argument('-o', '--output', help='output directory path', type = str, default='.')
   build_parser.add_argument('-w', '--wsize', help='sliding window size', default=10, type=int)
   build_parser.add_argument('-p', '--mod', help='hash modulus', default=100, type=int)
+  build_parser.add_argument('-l', '--lfmax', help='maximum LF steps for SA subsampling', default=5, type=int)
   build_parser.add_argument('-t', '--threads', help='number of helper threads', default=0, type=int)
   build_parser.add_argument('-k', help='keep temporary files',action='store_true')
   build_parser.add_argument('-v', help='verbose',action='store_true')
@@ -562,6 +622,7 @@ def main():
   ms_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
   ms_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
   ms_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
+  ms_parser.add_argument('-l', '--lfmax', help='maximum LF steps for SA subsampling', default=5, type=int)
   ms_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   ms_parser.set_defaults(which='ms')
   args = parser.parse_args()
@@ -582,7 +643,7 @@ def delete_temp_files(args,logfile,logfile_name):
     if args.k==False:
       print("==== Deleting temporary files.") # no need to show the command
       # command = "rm -f {file}.parse_old {file}.last {file}.bwlast {file}.ilist".format(file=args.reference)
-      command = "rm -f {file}.parse {file}.parse_old {file}.last {file}.bwlast {file}.dict {file}.dicz {file}.ilist {file}.occ {file}.esa {file}.ssa {file}.dicz.len {file}.C {file}.R {file}.bwt {file}.bwt.len {file}.bwt.heads".format(
+      command = "rm -f {file}.parse {file}.parse_old {file}.last {file}.bwlast {file}.dict {file}.dicz {file}.ilist {file}.occ {file}.esa {file}.s.esa {file}.s.esa.bv {file}.ssa {file}.s.ssa {file}.s.ssa.bv {file}.dicz.len {file}.C {file}.R {file}.bwt {file}.bwt.len {file}.bwt.heads".format(
           file=args.reference)
       if(execute_command(command,logfile,logfile_name)!=True):
         return

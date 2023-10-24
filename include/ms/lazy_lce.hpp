@@ -134,6 +134,10 @@ public:
     SlpT slp;
 
     int_vector<> samples_start;
+    sparse_bv_type subsampled_start_samples_bv;
+    sparse_bv_type subsampled_last_samples_bv;
+
+    size_t maxLF;
 
     typedef size_t size_type;
 
@@ -179,8 +183,21 @@ public:
         verbose("log2(n/r) = ", log2(double(this->bwt.size()) / this->r));
         verbose("log2(n) = ", log_n);
 
-        read_samples(filename + ".ssa", this->r, n, samples_start);
-        read_samples(filename + ".esa", this->r, n, this->samples_last);
+        string subsamples_start_filename = filename + ".s.ssa";
+        ifstream subsamples_start_file(subsamples_start_filename, ios::binary);
+        samples_start.load(subsamples_start_file);
+
+        string subsamples_start_bv_filename = filename + ".s.ssa.bv";
+        ifstream subsamples_start_bv_file(subsamples_start_bv_filename, ios::binary);
+        subsampled_start_samples_bv.load(subsamples_start_bv_file);
+
+        string subsamples_last_filename = filename + ".s.esa";
+        ifstream subsamples_last_file(subsamples_last_filename, ios::binary);
+        this->samples_last.load(subsamples_last_file);
+
+        string subsamples_last_bv_filename = filename + ".s.esa.bv";
+        ifstream subsamples_last_bv_file(subsamples_last_bv_filename, ios::binary);
+        subsampled_last_samples_bv.load(subsamples_last_bv_file);
 
         std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
         verbose("R-index construction complete");
@@ -222,25 +239,53 @@ public:
         DCHECK_EQ(slp.getLen()+1, this->bwt.size());
     }
 
-
-
-    void read_samples(std::string filename, ulint r, ulint n, int_vector<> &samples)
+    void static read_samples(std::string filename, sdsl::int_vector<> &samples)
     {
-        int log_n = bitsize(uint64_t(n));
-        struct stat filestat;
+        struct stat filestat_samples;
+        struct stat filestat_bwt;
+        struct stat filestat_bwt_heads;
         FILE *fd;
+
+        string base_filename = filename.substr(0, filename.find_last_of("."));
 
         if ((fd = fopen(filename.c_str(), "r")) == nullptr)
             error("open() file " + filename + " failed");
 
         int fn = fileno(fd);
-        if (fstat(fn, &filestat) < 0)
+        if (fstat(fn, &filestat_samples) < 0)
             error("stat() file " + filename + " failed");
 
-        if (filestat.st_size % SSABYTES != 0)
+        if (filestat_samples.st_size % SSABYTES != 0)
             error("invilid file " + filename);
 
-        size_t length = filestat.st_size / (2*SSABYTES);
+        FILE *fd_bwt;
+
+        if ((fd_bwt = fopen((base_filename + ".bwt").c_str(), "r")) == nullptr)
+            error("open() file " + base_filename + ".bwt failed");
+
+        int fn_bwt = fileno(fd_bwt);
+        if (fstat(fn_bwt, &filestat_bwt) < 0)
+            error("stat() file " + base_filename + ".bwt failed");
+
+        auto n = filestat_bwt.st_size;
+        int log_n = bitsize(uint64_t(n));
+
+        fclose(fd_bwt);
+
+        FILE *fd_bwt_heads;
+
+        if ((fd_bwt_heads = fopen((base_filename + ".bwt.heads").c_str(), "r")) == nullptr)
+            error("open() file " + base_filename + ".bwt.heads failed");
+
+        int fn_bwt_heads = fileno(fd_bwt_heads);
+        if (fstat(fn_bwt_heads, &filestat_bwt_heads) < 0)
+            error("stat() file " + base_filename + ".bwt.heads failed");
+
+        ulint r = filestat_bwt_heads.st_size;
+
+        fclose(fd_bwt_heads);
+
+        ulint length = filestat_samples.st_size / (2*SSABYTES);
         //Check that the length of the file is 2*r elements of 5 bytes
         assert(length == r);
 
@@ -251,7 +296,8 @@ public:
         uint64_t left = 0;
         uint64_t right = 0;
         size_t i = 0;
-        while (fread((char *)&left, SSABYTES, 1, fd) && fread((char *)&right, SSABYTES, 1,fd)) {
+        while (fread((char *)&left, SSABYTES, 1, fd) && fread((char *)&right, SSABYTES, 1,fd))
+        {
             ulint val = (right ? right - 1 : n - 1);
             assert(bitsize(uint64_t(val)) <= log_n);
             samples[i++] = val;
@@ -306,7 +352,7 @@ public:
         auto pos = this->bwt.select(1, pattern_at(m-1));
         {
             const ri::ulint run_of_j = this->bwt.run_of_position(pos);
-            write_ref(samples_start[run_of_j]);
+            write_ref(subsamples_start(run_of_j));
         }
         pos = LF(pos, pattern_at(m-1));
 
@@ -346,7 +392,7 @@ public:
                 };
 
                 auto delay_succeeding_lce = [&] () -> Triplet {
-                    const size_t textposStart = this->samples_start[run1];
+                    const size_t textposStart = subsamples_start(run1);
 
                     stored_it[lce_cnt] = i;
                     stored_sample_pos[lce_cnt] = textposStart;
@@ -359,7 +405,7 @@ public:
 
                 auto delay_preceding_lce = [&] () -> Triplet {
                     const ri::ulint run0 = this->bwt.run_of_position(sa0);
-                    const size_t textposLast = this->samples_last[run0];
+                    const size_t textposLast = subsamples_last(run0);
 
                     stored_it[lce_cnt] = i;
                     stored_sample_pos[lce_cnt] = textposLast;
@@ -395,7 +441,7 @@ public:
                     if (pos < thr) {
                         if (!lce_is_paused && thr_lce.skip_preceding_lce(run1, last_len)) {
                             const ri::ulint run0 = this->bwt.run_of_position(sa0);
-                            const size_t ref0 = this->samples_last[run0];
+                            const size_t ref0 = subsamples_last(run0);
                             const size_t len0 = last_len;
                             return {sa0, ref0, len0};
                         } else {
@@ -403,7 +449,7 @@ public:
                         }
                     } else {
                         if (!lce_is_paused && thr_lce.skip_succeeding_lce(run1, last_len)) {
-                            const size_t ref1 = this->samples_start[run1];;
+                            const size_t ref1 = subsamples_start(run1);
                             const size_t len1 = last_len;
                             return {sa1, ref1, len1};
                         } else {
@@ -515,7 +561,7 @@ public:
         auto pos = this->bwt.select(1, pattern_at(m-1));
         {
             const ri::ulint run_of_j = this->bwt.run_of_position(pos);
-            write_ref(samples_start[run_of_j]);
+            write_ref(subsamples_start(run_of_j));
         }
         pos = LF(pos, pattern_at(m-1));
 
@@ -525,7 +571,7 @@ public:
         auto delay_preceding_lce = [&] (const size_t rank, char c, int i) -> Triplet {
             const size_t sa0 = this->bwt.select(rank-1, c);
             const ri::ulint run0 = this->bwt.run_of_position(sa0);
-            const size_t textposLast = this->samples_last[run0];
+            const size_t textposLast = subsamples_last(run0);
 
             //verbose("i = ", i, "last_ref = ", last_ref, " lce_is_paused =", lce_is_paused, "UP= ", textposLast);
             lce_is_paused = true;
@@ -538,7 +584,7 @@ public:
         };
 
         auto delay_succeeding_lce = [&] (const size_t sa1, const size_t run, int i) -> Triplet {
-            const size_t textposStart = this->samples_start[run];
+            const size_t textposStart = subsamples_start(run);
 
             //verbose("sa1 ", sa1);
             //verbose("i = ", i, "last_ref = ", last_ref, " lce_is_paused =", lce_is_paused, "DOWN= ", textposStart, " run = ", this->bwt.run_of_position(sa1));
@@ -620,13 +666,13 @@ public:
                     if (pos < thr) {
                         if (!lce_is_paused && thr_lce.skip_preceding_lce(run1, last_len)) {
                             const ri::ulint run0 = this->bwt.run_of_position(sa0);
-                            const size_t ref0 = this->samples_last[run0];
+                            const size_t ref0 = subsamples_last(run0);
                             const size_t len0 = last_len;
                             //verbose("i = ", i, "last_ref = ", last_ref, "STORED UP for = ", ref0, " pos= ", pos, " thr= ", thr);
 
-                            const size_t ref1 = this->samples_start[run1];
+                            const size_t ref1 = subsamples_start(run1);
                             //verbose("up lce = ", compute_lce(last_ref, ref0, 1000));
-                            //verbose("down lce = ", compute_lce(last_ref, this->samples_start[run1], 1000));
+                            //verbose("down lce = ", compute_lce(last_ref, subsamples_start(run1), 1000));
                             //verbose("i = ", i, "last_ref = ", last_ref, "STORED DOWN for = ", ref1);
                             return {sa0, ref0, len0};
                         } else {
@@ -634,7 +680,7 @@ public:
                         }
                     } else {
                         if (!lce_is_paused && thr_lce.skip_succeeding_lce(run1, last_len)) {
-                            const size_t ref1 = this->samples_start[run1];
+                            const size_t ref1 = subsamples_start(run1);
                             const size_t len1 = last_len;
                             //verbose("i = ", i, "last_ref = ", last_ref, "STORED DOWN for = ", ref1);
                             return {sa1, ref1, len1};
@@ -706,6 +752,89 @@ public:
         return l;
     }
 
+/**
+ * @brief Access the subsampled version of samples_last
+ *
+ * @param run The run index used for accessing samples_last.
+ * @return ulint - The corresponding value of samples_last.
+ */
+ulint subsamples_last(const ulint run) {
+    // Check if the run is subsampled using subsampled_last_samples_bv
+    if (subsampled_last_samples_bv[run] == 1) {
+        ulint result = this->samples_last[subsampled_last_samples_bv.rank(run)];
+        return result;
+    }
+
+    auto n = this->bwt_size();
+    // Find the BWT position of the last character in this run
+    // TODO, is this already present in the code?
+    ulint current_pos = this->bwt.run_range(run).second;
+
+    // Find the character at current_pos
+    auto c = this->bwt[current_pos];
+
+    // Traverse the BWT to find a subsampled run
+    current_pos = this->LF(current_pos, c);
+    ulint current_run = this->bwt.run_of_position(current_pos);
+    size_t k = 1;
+    c = this->bwt[current_pos];
+
+    while (subsampled_last_samples_bv[current_run] == 0 ||
+           (current_pos != n - 1 && c == this->bwt[current_pos + 1])) { // TODO: is there a more efficient way than querying the BWT?
+        current_pos = this->LF(current_pos, c);
+        current_run = this->bwt.run_of_position(current_pos);
+        k++;
+        c = this->bwt[current_pos];
+    }
+
+    assert(k <= this->maxLF);
+
+    ulint result = this->samples_last[subsampled_last_samples_bv.rank(current_run)] + k;
+    return result;
+}
+
+
+/**
+ * @brief Access the subsampled version of samples_start
+ *
+ * @param run The run index used for accessing samples_start.
+ * @return ulint - The corresponding value of samples_start.
+ */
+ulint subsamples_start(const ulint run) {
+    // Check if the run is subsampled using subsampled_start_samples_bv
+    if (subsampled_start_samples_bv[run] == 1) {
+        ulint result = this->samples_start[subsampled_start_samples_bv.rank(run)];
+        return result;
+    }
+
+    auto n = this->bwt_size();
+    // Find the BWT position of the first character in this run
+    // TODO, is this already present in the code?
+    ulint current_pos = this->bwt.run_range(run).first;
+
+    // Find the character at current_pos
+    auto c = this->bwt[current_pos];
+
+    // Traverse the BWT to find a subsampled run
+    current_pos = this->LF(current_pos, c);
+    ulint current_run = this->bwt.run_of_position(current_pos);
+    size_t k = 1;
+    c = this->bwt[current_pos];
+
+    while (subsampled_start_samples_bv[current_run] == 0 ||
+           (current_pos != 0 && c == this->bwt[current_pos - 1])) { // TODO: is there a more efficient way than querying the BWT?
+        current_pos = this->LF(current_pos, c);
+        current_run = this->bwt.run_of_position(current_pos);
+        k++;
+        c = this->bwt[current_pos];
+    }
+
+    assert(k <= this->maxLF);
+
+    ulint result = this->samples_start[subsampled_start_samples_bv.rank(current_run)] + k;
+    return result;
+}
+
     /* serialize the structure to the ostream
      * \param out     the ostream
      */
@@ -720,7 +849,11 @@ public:
         written_bytes += this->bwt.serialize(out);
         written_bytes += this->samples_last.serialize(out);
 
+        written_bytes += subsampled_last_samples_bv.serialize(out);
+
         written_bytes += samples_start.serialize(out, child, "samples_start");
+
+        written_bytes += subsampled_start_samples_bv.serialize(out);
 
         written_bytes += thresholds.serialize(out, child, "thresholds");
 
@@ -733,15 +866,18 @@ public:
     /* load the structure from the istream
      * \param in the istream
      */
-    void load(std::istream &in, const std::string& filename)
+    void load(std::istream &in, const std::string& filename, const size_t& _maxLF = 0)
     {
+        this->maxLF = _maxLF;
         in.read((char *)&this->terminator_position, sizeof(this->terminator_position));
         my_load(this->F, in);
         this->bwt.load(in);
         this->r = this->bwt.number_of_runs();
         this->samples_last.load(in);
+        subsampled_last_samples_bv.load(in);
         this->samples_start.load(in);
-        verbose("runof ", this->bwt.run_of_position(9734));
+        subsampled_start_samples_bv.load(in);
+        // verbose("runof ", this->bwt.run_of_position(9734));
 
         thresholds.load(in, &this->bwt);
         thr_lce.load(in, &this->bwt);
@@ -752,7 +888,7 @@ public:
     // // From r-index
     // ulint get_last_run_sample()
     // {
-    //     return (samples_last[r - 1] + 1) % bwt.size();
+    //     return (subsamples_last(r - 1) + 1) % bwt.size();
     // }
 
 protected :
