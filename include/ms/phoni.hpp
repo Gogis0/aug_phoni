@@ -128,6 +128,10 @@ public:
 
     // std::vector<ulint> samples_start;
     int_vector<> samples_start;
+    sparse_bv_type subsampled_start_samples_bv;
+    sparse_bv_type subsampled_last_samples_bv;
+
+    size_t maxLF;
     // int_vector<> samples_end;
     // std::vector<ulint> samples_last;
 
@@ -192,10 +196,21 @@ public:
         verbose("log2(r) = " , log2(double(this->r)));
         verbose("log2(n/r) = " , log2(double(this->bwt.size()) / this->r));
 
+        string subsamples_start_filename = filename + ".s.ssa";
+        ifstream subsamples_start_file(subsamples_start_filename, ios::binary);
+        samples_start.load(subsamples_start_file);
 
+        string subsamples_start_bv_filename = filename + ".s.ssa.bv";
+        ifstream subsamples_start_bv_file(subsamples_start_bv_filename, ios::binary);
+        subsampled_start_samples_bv.load(subsamples_start_bv_file);
 
-        read_samples(filename + ".ssa", this->r, n, samples_start);
-        read_samples(filename + ".esa", this->r, n, this->samples_last);
+        string subsamples_last_filename = filename + ".s.esa";
+        ifstream subsamples_last_file(subsamples_last_filename, ios::binary);
+        this->samples_last.load(subsamples_last_file);
+
+        string subsamples_last_bv_filename = filename + ".s.esa.bv";
+        ifstream subsamples_last_bv_file(subsamples_last_bv_filename, ios::binary);
+        subsampled_last_samples_bv.load(subsamples_last_bv_file);
 
 
         std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
@@ -231,45 +246,6 @@ public:
             verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
         }
         DCHECK_EQ(slp.getLen()+1, this->bwt.size());
-    }
-
-
-
-    void read_samples(std::string filename, ulint r, ulint n, int_vector<> &samples)
-    {
-        int log_n = bitsize(uint64_t(n));
-        struct stat filestat;
-        FILE *fd;
-
-        if ((fd = fopen(filename.c_str(), "r")) == nullptr)
-            error("open() file " + filename + " failed");
-
-        int fn = fileno(fd);
-        if (fstat(fn, &filestat) < 0)
-            error("stat() file " + filename + " failed");
-
-        if (filestat.st_size % SSABYTES != 0)
-            error("invilid file " + filename);
-
-        size_t length = filestat.st_size / (2*SSABYTES);
-        //Check that the length of the file is 2*r elements of 5 bytes
-        assert(length == r);
-
-        // Create the vector
-        samples = int_vector<>(r, 0, log_n);
-
-        // Read the vector
-        uint64_t left = 0;
-        uint64_t right = 0;
-        size_t i = 0;
-        while (fread((char *)&left, SSABYTES, 1, fd) && fread((char *)&right, SSABYTES, 1,fd))
-        {
-            ulint val = (right ? right - 1 : n - 1);
-            assert(bitsize(uint64_t(val)) <= log_n);
-            samples[i++] = val;
-        }
-
-        fclose(fd);
     }
 
     void write_int(ostream& os, const size_t& i){
@@ -330,8 +306,10 @@ public:
         auto pos = this->bwt.select(1, pattern_at(m-1));
         {
             const ri::ulint run_of_j = this->bwt.run_of_position(pos);
-            ON_DEBUG(ms_references[m-1] = samples_start[run_of_j]);
-            write_ref(samples_start[run_of_j]);
+            auto possible_start_pos = this->bwt.select(0, pattern_at(m-1));
+            auto start_pos = this->bwt.run_of_position(possible_start_pos)==run_of_j ? possible_start_pos : pos;
+            ON_DEBUG(ms_references[m-1] = subsamples_start(run_of_j, start_pos));
+            write_ref(subsamples_start(run_of_j, start_pos));
             DCHECK_EQ(slp.charAt(ms_references[m-1]),  pattern_at(m-1));
         }
         pos = LF(pos, pattern_at(m-1));
@@ -393,7 +371,7 @@ public:
 
 					const ri::ulint run1 = this->bwt.run_of_position(sa1);
 
-                    const size_t textposStart = this->samples_start[run1];
+                    const size_t textposStart = subsamples_start(run1, sa1);
 					#ifdef MEASURE_TIME
 					Stopwatch s;
 					#endif
@@ -418,7 +396,7 @@ public:
 
 					const ri::ulint run0 = this->bwt.run_of_position(sa0);
 
-                    const size_t textposLast = this->samples_last[run0];
+                    const size_t textposLast = subsamples_last(run0, sa0);
 					#ifdef MEASURE_TIME
 					Stopwatch s;
 					#endif
@@ -586,8 +564,10 @@ public:
         auto pos = this->bwt.select(1, pattern_at(m-1));
         {
             const ri::ulint run_of_j = this->bwt.run_of_position(pos);
-            ON_DEBUG(ms_references[m-1] = samples_start[run_of_j]);
-            write_ref(samples_start[run_of_j]);
+            auto possible_start_pos = this->bwt.select(0, pattern_at(m-1));
+            auto start_pos = this->bwt.run_of_position(possible_start_pos)==run_of_j ? possible_start_pos : pos;
+            ON_DEBUG(ms_references[m-1] = subsamples_start(run_of_j, start_pos));
+            write_ref(subsamples_start(run_of_j, start_pos));
             DCHECK_EQ(slp.charAt(ms_references[m-1]),  pattern_at(m-1));
         }
         pos = LF(pos, pattern_at(m-1));
@@ -650,7 +630,7 @@ public:
 
 					const ri::ulint run1 = this->bwt.run_of_position(sa1);
 
-                    const size_t textposStart = this->samples_start[run1];
+                    const size_t textposStart = subsamples_start(run1, sa1);
 					#ifdef MEASURE_TIME
 					Stopwatch s;
 					#endif
@@ -675,7 +655,7 @@ public:
 
 					const ri::ulint run0 = this->bwt.run_of_position(sa0);
 
-                    const size_t textposLast = this->samples_last[run0];
+                    const size_t textposLast = subsamples_last(run0, sa0);
 					#ifdef MEASURE_TIME
 					Stopwatch s;
 					#endif
@@ -794,6 +774,102 @@ public:
         return l;
     }
 
+    /**
+    * @brief Access the subsampled version of samples_last for testing purposes
+    *
+    * @param run The run index used for accessing samples_last.
+    * @return ulint - The corresponding value of samples_last.
+    */
+    ulint subsamples_last(const ulint& run) {
+        return subsamples_last(run, this->bwt.run_range(run).second);
+    }
+
+    /**
+    * @brief Access the subsampled version of samples_last
+    *
+    * @param run The run index used for accessing samples_last.
+    * @param pos The last position in the BWT corresponding to the run of interest.
+    * @return ulint - The corresponding value of samples_last.
+    */
+    ulint subsamples_last(const ulint& run, const ulint& pos) {
+        assert(pos == this->bwt.run_range(run).second);
+
+        // Check if the run is subsampled using subsampled_last_samples_bv
+        if (subsampled_last_samples_bv[run] == 1) {
+            return this->samples_last[subsampled_last_samples_bv.rank(run)];
+        }
+
+        auto n = this->bwt_size();
+
+        // Find the character at current_pos
+        auto c = this->bwt[pos];
+
+        // Traverse the BWT to find a subsampled run
+        ulint current_pos = this->LF(pos, c);
+        ulint current_run = this->bwt.run_of_position(current_pos);
+        size_t k = 1;
+
+        while (subsampled_last_samples_bv[current_run] == 0 ||
+            (current_pos != n - 1 && current_run == this->bwt.run_of_position(current_pos + 1))) { 
+            c = this->bwt[current_pos];
+            current_pos = this->LF(current_pos, c);
+            current_run = this->bwt.run_of_position(current_pos);
+            k++;
+        }
+
+        assert(k <= this->maxLF);
+
+        return this->samples_last[subsampled_last_samples_bv.rank(current_run)] + k;
+    }
+
+
+    /**
+    * @brief Access the subsampled version of samples_start for testing purposes
+    *
+    * @param run The run index used for accessing samples_start.
+    * @return ulint - The corresponding value of samples_start.
+    */
+    ulint subsamples_start(const ulint& run) {
+        return subsamples_start(run, this->bwt.run_range(run).first);
+    }
+
+
+    /**
+    * @brief Access the subsampled version of samples_start
+    *
+    * @param run The run index used for accessing samples_start.
+    * @param pos The first position in the BWT corresponding to the run of interest.
+    * @return ulint - The corresponding value of samples_start.
+    */
+    ulint subsamples_start(const ulint& run, const ulint& pos) {
+        assert(pos == this->bwt.run_range(run).first);
+
+        // Check if the run is subsampled using subsampled_start_samples_bv
+        if (subsampled_start_samples_bv[run] == 1) {
+            return this->samples_start[subsampled_start_samples_bv.rank(run)];
+        }
+
+        // Find the character at current_pos
+        auto c = this->bwt[pos];
+
+        // Traverse the BWT to find a subsampled run
+        ulint current_pos = this->LF(pos, c);
+        ulint current_run = this->bwt.run_of_position(current_pos);
+        size_t k = 1;
+
+        while (subsampled_start_samples_bv[current_run] == 0 ||
+            (current_pos != 0 && current_run == this->bwt.run_of_position(current_pos - 1))) { 
+            c = this->bwt[current_pos];
+            current_pos = this->LF(current_pos, c);
+            current_run = this->bwt.run_of_position(current_pos);
+            k++;
+        }
+
+        assert(k <= this->maxLF);
+
+        return this->samples_start[subsampled_start_samples_bv.rank(current_run)] + k;
+    }
+
     /* serialize the structure to the ostream
      * \param out     the ostream
      */
@@ -808,7 +884,11 @@ public:
         written_bytes += this->bwt.serialize(out);
         written_bytes += this->samples_last.serialize(out);
 
+        written_bytes += subsampled_last_samples_bv.serialize(out);
+
         written_bytes += samples_start.serialize(out, child, "samples_start");
+
+        written_bytes += subsampled_start_samples_bv.serialize(out);
 
         sdsl::structure_tree::add_size(child, written_bytes);
         return written_bytes;
@@ -818,14 +898,17 @@ public:
     /* load the structure from the istream
      * \param in the istream
      */
-    void load(std::istream &in, const std::string& filename)
+    void load(std::istream &in, const std::string& filename, const size_t& _maxLF = 0)
     {
+        this->maxLF = _maxLF;
         in.read((char *)&this->terminator_position, sizeof(this->terminator_position));
         my_load(this->F, in);
         this->bwt.load(in);
         this->r = this->bwt.number_of_runs();
         this->samples_last.load(in);
+        subsampled_last_samples_bv.load(in);
         this->samples_start.load(in);
+        subsampled_start_samples_bv.load(in);
         
         load_grammar(filename);
     }
