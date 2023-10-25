@@ -457,73 +457,75 @@ def build(args):
   with open(logfile_name,"w") as logfile:
     args.logfile = logfile
     args.logfile_name = logfile_name
-    # ---------- parsing of the input file
     start0 = start = time.time()
-    if args.threads>0:
-      if args.f:
-        command = "{exe} {file} -w {wsize} -p {modulus} -t {th} -f".format(
-                exe = os.path.join(args.bigbwt_dir,parse_fasta_exe),
-                wsize=args.wsize, modulus = args.mod, th=args.threads, file=args.reference)
+    if not args.onlysubsampling:
+      # ---------- parsing of the input file
+      if args.threads>0:
+        if args.f:
+          command = "{exe} {file} -w {wsize} -p {modulus} -t {th} -f".format(
+                  exe = os.path.join(args.bigbwt_dir,parse_fasta_exe),
+                  wsize=args.wsize, modulus = args.mod, th=args.threads, file=args.reference)
+        else:
+          command = "{exe} {file} -w {wsize} -p {modulus} -t {th}".format(
+                  exe = os.path.join(args.bigbwt_dir,parse_exe),
+                  wsize=args.wsize, modulus = args.mod, th=args.threads, file=args.reference)
       else:
-        command = "{exe} {file} -w {wsize} -p {modulus} -t {th}".format(
-                exe = os.path.join(args.bigbwt_dir,parse_exe),
-                wsize=args.wsize, modulus = args.mod, th=args.threads, file=args.reference)
-    else:
-      if args.f:
-        command = "{exe} {file} -w {wsize} -p {modulus} -f".format(
-                exe = os.path.join(args.bigbwt_dir,parseNT_exe),
-                wsize=args.wsize, modulus = args.mod, th=args.threads, file=args.reference)
-      else:
-        command = "{exe} {file} -w {wsize} -p {modulus}".format(
-                exe = os.path.join(args.bigbwt_dir,parseNT_exe),
-                wsize=args.wsize, modulus = args.mod, file=args.reference)
-    if args.v: command += " -v"
-    # if args.f: command += " -f"
-    command += " -s"
-    print("==== Parsing. Command:", command)
-    if(execute_command(command,logfile,logfile_name)!=True):
-      return
-    print("Elapsed time: {0:.4f}".format(time.time()-start))
-    if args.parsing:
-      # delete temporary parsing files
-      command = "rm -f {file}.parse_old {file}.last".format(file=args.reference) # check format when -t is used
+        if args.f:
+          command = "{exe} {file} -w {wsize} -p {modulus} -f".format(
+                  exe = os.path.join(args.bigbwt_dir,parseNT_exe),
+                  wsize=args.wsize, modulus = args.mod, th=args.threads, file=args.reference)
+        else:
+          command = "{exe} {file} -w {wsize} -p {modulus}".format(
+                  exe = os.path.join(args.bigbwt_dir,parseNT_exe),
+                  wsize=args.wsize, modulus = args.mod, file=args.reference)
+      if args.v: command += " -v"
+      # if args.f: command += " -f"
+      command += " -s"
+      print("==== Parsing. Command:", command)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
-      print("==== Stopping after the parsing phase as requested")
-      return
-    elif args.compress:
-      # save parsing files
-      start = time.time()
-      command = "tar -cJf {file}.parse.txz {file}.parse {file}.dicz".format(file=args.reference)
-      print("==== Compressing. Command:", command)
-      if(execute_command(command,logfile,logfile_name,env={"XZ_OPT":"-9"})!=True):
-        return
       print("Elapsed time: {0:.4f}".format(time.time()-start))
-      delete_temp_files(args,logfile,logfile_name)
-      print("==== Done: Parsing output xz-compressed as requested")
-      return
+      if args.parsing:
+        # delete temporary parsing files
+        command = "rm -f {file}.parse_old {file}.last".format(file=args.reference) # check format when -t is used
+        if(execute_command(command,logfile,logfile_name)!=True):
+          return
+        print("==== Stopping after the parsing phase as requested")
+        return
+      elif args.compress:
+        # save parsing files
+        start = time.time()
+        command = "tar -cJf {file}.parse.txz {file}.parse {file}.dicz".format(file=args.reference)
+        print("==== Compressing. Command:", command)
+        if(execute_command(command,logfile,logfile_name,env={"XZ_OPT":"-9"})!=True):
+          return
+        print("Elapsed time: {0:.4f}".format(time.time()-start))
+        delete_temp_files(args,logfile,logfile_name)
+        print("==== Done: Parsing output xz-compressed as requested")
+        return
 
-    # ----------- computation of the PFP data structures
+      # ----------- computation of the PFP data structures
     
-    bigbwt_thread = BWT(name = "{}".format(args.reference), args=args, counter=1)  # ...Instantiate a thread and pass a unique ID to it
-    bigbwt_thread.start()                                       # ...Start the thread, invoke the run method
-    bigbwt_thread.join()
+      bigbwt_thread = BWT(name = "{}".format(args.reference), args=args, counter=1)  # ...Instantiate a thread and pass a unique ID to it
+      bigbwt_thread.start()                                       # ...Start the thread, invoke the run method
+      bigbwt_thread.join()
 
     subsampling_sa_thread = SA_subsampling(name = "{}".format(args.reference), args=args, counter=2)  # ...Instantiate a thread and pass a unique ID to it
     subsampling_sa_thread.start()                                       # ...Start the thread, invoke the run method
     subsampling_sa_thread.join()
 
-    pf_thresholds_thread = PFPthresholds(name = "{}".format(args.reference), args=args, counter=3)  # ...Instantiate a thread and pass a unique ID to it
-    pf_thresholds_thread.start()                                       # ...Start the thread, invoke the run method
-    pf_thresholds_thread.join()
+    if not args.onlysubsampling:
+      pf_thresholds_thread = PFPthresholds(name = "{}".format(args.reference), args=args, counter=3)  # ...Instantiate a thread and pass a unique ID to it
+      pf_thresholds_thread.start()                                       # ...Start the thread, invoke the run method
+      pf_thresholds_thread.join()
 
-    bigrepair_thread = bigrepair(name = "{}".format(args.reference), args=args, counter=4)  # ...Instantiate a thread and pass a unique ID to it
-    bigrepair_thread.start()                                       # ...Start the thread, invoke the run method
-    bigrepair_thread.join()
+      bigrepair_thread = bigrepair(name = "{}".format(args.reference), args=args, counter=4)  # ...Instantiate a thread and pass a unique ID to it
+      bigrepair_thread.start()                                       # ...Start the thread, invoke the run method
+      bigrepair_thread.join()
 
-    SLP_thread = SLP(name = "{}".format(args.reference), args=args, counter=5)  # ...Instantiate a thread and pass a unique ID to it
-    SLP_thread.start()                                       # ...Start the thread, invoke the run method
-    SLP_thread.join()
+      SLP_thread = SLP(name = "{}".format(args.reference), args=args, counter=5)  # ...Instantiate a thread and pass a unique ID to it
+      SLP_thread.start()                                       # ...Start the thread, invoke the run method
+      SLP_thread.join()
     
     phoni_thread = build_phoni(name = "{}".format(args.reference), args=args, counter=6)  # ...Instantiate a thread and pass a unique ID to it
     phoni_thread.start()                                       # ...Start the thread, invoke the run method
@@ -610,6 +612,7 @@ def main():
   build_parser.add_argument('-w', '--wsize', help='sliding window size', default=10, type=int)
   build_parser.add_argument('-p', '--mod', help='hash modulus', default=100, type=int)
   build_parser.add_argument('-l', '--lfmax', help='maximum LF steps for SA subsampling', default=5, type=int)
+  build_parser.add_argument('--onlysubsampling',  help='build the index for a new subsampling sparseness value assuming that all necessary intermediate files are already present (-k argument)',action='store_true')
   build_parser.add_argument('-t', '--threads', help='number of helper threads', default=0, type=int)
   build_parser.add_argument('-k', help='keep temporary files',action='store_true')
   build_parser.add_argument('-v', help='verbose',action='store_true')
