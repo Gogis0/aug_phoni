@@ -92,10 +92,13 @@ void performSubSampling(const size_t &maxLF, const sdsl::int_vector<> &samples,
 
   std::vector<uint64_t> samples_runIdx_sorted;
   samples_runIdx_sorted.resize(r);
-  iota(samples_runIdx_sorted.begin(), samples_runIdx_sorted.end(), 0);
+
+  for (uint64_t i = 0; i < r; i++) {
+    samples_runIdx_sorted[i] = i;
+  }
 
   sort(samples_runIdx_sorted.begin(), samples_runIdx_sorted.end(),
-       [&samples](const auto &a, const auto &b) -> bool {
+       [&samples](const uint64_t &a, const uint64_t &b) -> bool {
          return samples[a] < samples[b];
        });
 
