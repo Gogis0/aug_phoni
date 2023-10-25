@@ -77,10 +77,9 @@ build_phoni_exe         = os.path.join(phoni_dirname, "build_phoni")
 phoni_query_exe         = os.path.join(phoni_dirname, "phoni")
 
 build_aug_exe         = os.path.join(phoni_dirname, "build_aug")
-aug_query_exe         = os.path.join(phoni_dirname, "aug_phoni_lazy")
+aug_query_exe         = os.path.join(phoni_dirname, "aug_phoni")
 
 subsampling_sa_exe         = os.path.join(phoni_dirname, "subsampling_sa")
-test_subsampling_sa_exe         = os.path.join(phoni_dirname, "test_subsampling_sa")
 
 class PFPthresholds(threading.Thread):
     def __init__(self, name, counter, args):
@@ -384,28 +383,6 @@ class SA_subsampling(threading.Thread):
       if(execute_command(command,logfile,logfile_name)!=True):
         return
       print("Elapsed time: {0:.4f}".format(time.time()-start)); 
-class test_SA_subsampling(threading.Thread):
-  def __init__(self, name, counter, args):
-        threading.Thread.__init__(self)
-        self.threadID = counter
-        self.name = name
-        self.counter = counter
-        self.args = args
-
-  def run(self):
-      args = self.args
-      logfile = args.logfile
-      logfile_name = args.logfile_name
-      print("{} testing SA subsampling started!".format(self.getName()))        # "Thread-x started!"
-
-      # ----------- computation of the BWT of the parsing
-      start = time.time()
-      command = "{exe} {file} -l {maxLF}".format(
-              exe = os.path.join(args.exe_dir, test_subsampling_sa_exe), file=args.reference, maxLF=args.lfmax)
-      print("==== Verifying the subsampled suffix array. Command:", command)
-      if(execute_command(command,logfile,logfile_name)!=True):
-        return
-      print("Elapsed time: {0:.4f}".format(time.time()-start)); 
 
 
 class build_phoni(threading.Thread):
@@ -530,11 +507,6 @@ def build(args):
     phoni_thread = build_phoni(name = "{}".format(args.reference), args=args, counter=6)  # ...Instantiate a thread and pass a unique ID to it
     phoni_thread.start()                                       # ...Start the thread, invoke the run method
     phoni_thread.join()
-
-    # # For debugging purposes, comment out in final version
-    # subsampling_sa_thread = test_SA_subsampling(name = "{}".format(args.reference), args=args, counter=7)  # ...Instantiate a thread and pass a unique ID to it
-    # subsampling_sa_thread.start()                                       # ...Start the thread, invoke the run method
-    # subsampling_sa_thread.join()
 
 
 

@@ -58,7 +58,7 @@ void run(const Args& args) {
 
   FILE *out_fd;
 
-  const std::string tmp_out_filename = std::string(args.patterns) + ".ms.tmp.out.aug";
+  const std::string tmp_out_filename = std::string(args.patterns) + ".ms.tmp.out.aug.lazy";
 
   if ((out_fd = fopen(tmp_out_filename.c_str(), "w")) == nullptr)
     error("open() file " + tmp_out_filename + " failed");
@@ -87,14 +87,14 @@ void run(const Args& args) {
   verbose("Printing plain output");
   t_insert_start = std::chrono::high_resolution_clock::now();
 
-  std::ofstream f_pointers(args.patterns + ".pointers.aug");
-  std::ofstream f_lengths(args.patterns + ".lengths.aug");
+  std::ofstream f_pointers(args.patterns + ".pointers.aug.lazy");
+  std::ofstream f_lengths(args.patterns + ".lengths.aug.lazy");
 
   if (!f_pointers.is_open())
-    error("open() file " + std::string(args.patterns) + ".pointers.aug failed");
+    error("open() file " + std::string(args.patterns) + ".pointers.aug.lazy failed");
 
   if (!f_lengths.is_open())
-    error("open() file " + std::string(args.patterns) + ".lengths.aug failed");
+    error("open() file " + std::string(args.patterns) + ".lengths.aug.lazy failed");
 
   FILE *in_fd;
 

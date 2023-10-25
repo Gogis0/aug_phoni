@@ -7,8 +7,7 @@
 #define VERBOSE
 
 #include <common.hpp>
-
-#include <lazy_lce.hpp>
+#include <subsampling_sa.hpp>
 
 void performSubSampling(const size_t &maxLF, const sdsl::int_vector<> &samples,
                         ri::sparse_sd_vector &subsampled_runIdx_bv_sparse,
@@ -25,7 +24,7 @@ int main(int argc, char *const argv[]) {
         std::chrono::high_resolution_clock::now();
 
     sdsl::int_vector<> samples_start;
-    ms_pointers<>::read_samples(args.filename + ".ssa", samples_start);
+    read_samples(args.filename + ".ssa", samples_start);
     ri::sparse_sd_vector subsampled_starts_runIdx_bv_sparse;
     sdsl::int_vector<> subsampled_starts_values;
     performSubSampling(args.maxLF, samples_start,
@@ -58,7 +57,7 @@ int main(int argc, char *const argv[]) {
         std::chrono::high_resolution_clock::now();
 
     sdsl::int_vector<> samples_end;
-    ms_pointers<>::read_samples(args.filename + ".esa", samples_end);
+    read_samples(args.filename + ".esa", samples_end);
     ri::sparse_sd_vector subsampled_ends_runIdx_bv_sparse;
     sdsl::int_vector<> subsampled_ends_values;
     performSubSampling(args.maxLF, samples_end,

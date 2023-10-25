@@ -7,6 +7,7 @@
 #define VERBOSE
 
 #include <common.hpp>
+#include <subsampling_sa.hpp>
 
 #include <lazy_lce.hpp>
 
@@ -20,9 +21,9 @@ int main(int argc, char *const argv[]) {
       std::chrono::high_resolution_clock::now();
 
   sdsl::int_vector<> samples_start;
-  ms_pointers<>::read_samples(args.filename + ".ssa", samples_start);
+  read_samples(args.filename + ".ssa", samples_start);
   sdsl::int_vector<> samples_end;
-  ms_pointers<>::read_samples(args.filename + ".esa", samples_end);
+  read_samples(args.filename + ".esa", samples_end);
 
   ms_pointers<PlainSlp<var_t, Fblc, Fblc>> ms;
 

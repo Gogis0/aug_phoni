@@ -6,7 +6,7 @@
 
 #include <sdsl/io.hpp>
 
-#include <lazy_lce.hpp>
+#include <aug_phoni.hpp> // Could be either aug_phoni.hpp or lazy_lce.hpp
 #include <thr_lce_ds.hpp>
 
 #include <malloc_count.h>
@@ -34,7 +34,7 @@ int main(int argc, char *const argv[]) {
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
     {
-    ofstream outfile(args.filename + ".aug", std::ios::binary);
+    ofstream outfile(args.filename + "." + to_string(args.maxLF) + ".aug", std::ios::binary);
     ms.serialize(outfile);
     }
   }
