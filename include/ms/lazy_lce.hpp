@@ -352,7 +352,9 @@ public:
         auto pos = this->bwt.select(1, pattern_at(m-1));
         {
             const ri::ulint run_of_j = this->bwt.run_of_position(pos);
-            write_ref(subsamples_start(run_of_j));
+            auto possible_start_pos = this->bwt.select(0, pattern_at(m-1));
+            auto start_pos = this->bwt.run_of_position(possible_start_pos)==run_of_j ? possible_start_pos : pos;
+            write_ref(subsamples_start(run_of_j, start_pos));
         }
         pos = LF(pos, pattern_at(m-1));
 
@@ -392,7 +394,7 @@ public:
                 };
 
                 auto delay_succeeding_lce = [&] () -> Triplet {
-                    const size_t textposStart = subsamples_start(run1);
+                    const size_t textposStart = subsamples_start(run1, sa1);
 
                     stored_it[lce_cnt] = i;
                     stored_sample_pos[lce_cnt] = textposStart;
@@ -405,7 +407,7 @@ public:
 
                 auto delay_preceding_lce = [&] () -> Triplet {
                     const ri::ulint run0 = this->bwt.run_of_position(sa0);
-                    const size_t textposLast = subsamples_last(run0);
+                    const size_t textposLast = subsamples_last(run0, sa0);
 
                     stored_it[lce_cnt] = i;
                     stored_sample_pos[lce_cnt] = textposLast;
@@ -441,7 +443,7 @@ public:
                     if (pos < thr) {
                         if (!lce_is_paused && thr_lce.skip_preceding_lce(run1, last_len)) {
                             const ri::ulint run0 = this->bwt.run_of_position(sa0);
-                            const size_t ref0 = subsamples_last(run0);
+                            const size_t ref0 = subsamples_last(run0, sa0);
                             const size_t len0 = last_len;
                             return {sa0, ref0, len0};
                         } else {
@@ -449,7 +451,7 @@ public:
                         }
                     } else {
                         if (!lce_is_paused && thr_lce.skip_succeeding_lce(run1, last_len)) {
-                            const size_t ref1 = subsamples_start(run1);
+                            const size_t ref1 = subsamples_start(run1, sa1);
                             const size_t len1 = last_len;
                             return {sa1, ref1, len1};
                         } else {
@@ -561,7 +563,9 @@ public:
         auto pos = this->bwt.select(1, pattern_at(m-1));
         {
             const ri::ulint run_of_j = this->bwt.run_of_position(pos);
-            write_ref(subsamples_start(run_of_j));
+            auto possible_start_pos = this->bwt.select(0, pattern_at(m-1));
+            auto start_pos = this->bwt.run_of_position(possible_start_pos)==run_of_j ? possible_start_pos : pos;
+            write_ref(subsamples_start(run_of_j, start_pos));
         }
         pos = LF(pos, pattern_at(m-1));
 
@@ -571,7 +575,7 @@ public:
         auto delay_preceding_lce = [&] (const size_t rank, char c, int i) -> Triplet {
             const size_t sa0 = this->bwt.select(rank-1, c);
             const ri::ulint run0 = this->bwt.run_of_position(sa0);
-            const size_t textposLast = subsamples_last(run0);
+            const size_t textposLast = subsamples_last(run0, sa0);
 
             //verbose("i = ", i, "last_ref = ", last_ref, " lce_is_paused =", lce_is_paused, "UP= ", textposLast);
             lce_is_paused = true;
@@ -584,7 +588,7 @@ public:
         };
 
         auto delay_succeeding_lce = [&] (const size_t sa1, const size_t run, int i) -> Triplet {
-            const size_t textposStart = subsamples_start(run);
+            const size_t textposStart = subsamples_start(run, sa1);
 
             //verbose("sa1 ", sa1);
             //verbose("i = ", i, "last_ref = ", last_ref, " lce_is_paused =", lce_is_paused, "DOWN= ", textposStart, " run = ", this->bwt.run_of_position(sa1));
@@ -666,13 +670,13 @@ public:
                     if (pos < thr) {
                         if (!lce_is_paused && thr_lce.skip_preceding_lce(run1, last_len)) {
                             const ri::ulint run0 = this->bwt.run_of_position(sa0);
-                            const size_t ref0 = subsamples_last(run0);
+                            const size_t ref0 = subsamples_last(run0, sa0);
                             const size_t len0 = last_len;
                             //verbose("i = ", i, "last_ref = ", last_ref, "STORED UP for = ", ref0, " pos= ", pos, " thr= ", thr);
 
-                            const size_t ref1 = subsamples_start(run1);
+                            const size_t ref1 = subsamples_start(run1, sa1);
                             //verbose("up lce = ", compute_lce(last_ref, ref0, 1000));
-                            //verbose("down lce = ", compute_lce(last_ref, subsamples_start(run1), 1000));
+                            //verbose("down lce = ", compute_lce(last_ref, subsamples_start(run1, sa1), 1000));
                             //verbose("i = ", i, "last_ref = ", last_ref, "STORED DOWN for = ", ref1);
                             return {sa0, ref0, len0};
                         } else {
@@ -680,7 +684,7 @@ public:
                         }
                     } else {
                         if (!lce_is_paused && thr_lce.skip_succeeding_lce(run1, last_len)) {
-                            const size_t ref1 = subsamples_start(run1);
+                            const size_t ref1 = subsamples_start(run1, sa1);
                             const size_t len1 = last_len;
                             //verbose("i = ", i, "last_ref = ", last_ref, "STORED DOWN for = ", ref1);
                             return {sa1, ref1, len1};
@@ -752,87 +756,101 @@ public:
         return l;
     }
 
-/**
- * @brief Access the subsampled version of samples_last
- *
- * @param run The run index used for accessing samples_last.
- * @return ulint - The corresponding value of samples_last.
- */
-ulint subsamples_last(const ulint run) {
-    // Check if the run is subsampled using subsampled_last_samples_bv
-    if (subsampled_last_samples_bv[run] == 1) {
-        ulint result = this->samples_last[subsampled_last_samples_bv.rank(run)];
-        return result;
+    /**
+    * @brief Access the subsampled version of samples_last for testing purposes
+    *
+    * @param run The run index used for accessing samples_last.
+    * @return ulint - The corresponding value of samples_last.
+    */
+    ulint subsamples_last(const ulint& run) {
+        return subsamples_last(run, this->bwt.run_range(run).second);
     }
 
-    auto n = this->bwt_size();
-    // Find the BWT position of the last character in this run
-    // TODO, is this already present in the code?
-    ulint current_pos = this->bwt.run_range(run).second;
+    /**
+    * @brief Access the subsampled version of samples_last
+    *
+    * @param run The run index used for accessing samples_last.
+    * @param pos The last position in the BWT corresponding to the run of interest.
+    * @return ulint - The corresponding value of samples_last.
+    */
+    ulint subsamples_last(const ulint& run, const ulint& pos) {
+        assert(pos == this->bwt.run_range(run).second);
 
-    // Find the character at current_pos
-    auto c = this->bwt[current_pos];
+        // Check if the run is subsampled using subsampled_last_samples_bv
+        if (subsampled_last_samples_bv[run] == 1) {
+            return this->samples_last[subsampled_last_samples_bv.rank(run)];
+        }
 
-    // Traverse the BWT to find a subsampled run
-    current_pos = this->LF(current_pos, c);
-    ulint current_run = this->bwt.run_of_position(current_pos);
-    size_t k = 1;
-    c = this->bwt[current_pos];
+        auto n = this->bwt_size();
 
-    while (subsampled_last_samples_bv[current_run] == 0 ||
-           (current_pos != n - 1 && current_run == this->bwt.run_of_position(current_pos + 1))) { // TODO: is there a more efficient way than querying the BWT?
-        current_pos = this->LF(current_pos, c);
-        current_run = this->bwt.run_of_position(current_pos);
-        k++;
-        c = this->bwt[current_pos];
+        // Find the character at current_pos
+        auto c = this->bwt[pos];
+
+        // Traverse the BWT to find a subsampled run
+        ulint current_pos = this->LF(pos, c);
+        ulint current_run = this->bwt.run_of_position(current_pos);
+        size_t k = 1;
+
+        while (subsampled_last_samples_bv[current_run] == 0 ||
+            (current_pos != n - 1 && current_run == this->bwt.run_of_position(current_pos + 1))) { 
+            c = this->bwt[current_pos];
+            current_pos = this->LF(current_pos, c);
+            current_run = this->bwt.run_of_position(current_pos);
+            k++;
+        }
+
+        assert(k <= this->maxLF);
+
+        return this->samples_last[subsampled_last_samples_bv.rank(current_run)] + k;
     }
 
-    assert(k <= this->maxLF);
 
-    ulint result = this->samples_last[subsampled_last_samples_bv.rank(current_run)] + k;
-    return result;
-}
-
-
-/**
- * @brief Access the subsampled version of samples_start
- *
- * @param run The run index used for accessing samples_start.
- * @return ulint - The corresponding value of samples_start.
- */
-ulint subsamples_start(const ulint run) {
-    // Check if the run is subsampled using subsampled_start_samples_bv
-    if (subsampled_start_samples_bv[run] == 1) {
-        ulint result = this->samples_start[subsampled_start_samples_bv.rank(run)];
-        return result;
+    /**
+    * @brief Access the subsampled version of samples_start for testing purposes
+    *
+    * @param run The run index used for accessing samples_start.
+    * @return ulint - The corresponding value of samples_start.
+    */
+    ulint subsamples_start(const ulint& run) {
+        return subsamples_start(run, this->bwt.run_range(run).first);
     }
 
-    // Find the BWT position of the first character in this run
-    // TODO, is this already present in the code?
-    ulint current_pos = this->bwt.run_range(run).first;
 
-    // Find the character at current_pos
-    auto c = this->bwt[current_pos];
+    /**
+    * @brief Access the subsampled version of samples_start
+    *
+    * @param run The run index used for accessing samples_start.
+    * @param pos The first position in the BWT corresponding to the run of interest.
+    * @return ulint - The corresponding value of samples_start.
+    */
+    ulint subsamples_start(const ulint& run, const ulint& pos) {
+        assert(pos == this->bwt.run_range(run).first);
 
-    // Traverse the BWT to find a subsampled run
-    current_pos = this->LF(current_pos, c);
-    ulint current_run = this->bwt.run_of_position(current_pos);
-    size_t k = 1;
-    c = this->bwt[current_pos];
+        // Check if the run is subsampled using subsampled_start_samples_bv
+        if (subsampled_start_samples_bv[run] == 1) {
+            return this->samples_start[subsampled_start_samples_bv.rank(run)];
+        }
 
-    while (subsampled_start_samples_bv[current_run] == 0 ||
-           (current_pos != 0 && current_run == this->bwt.run_of_position(current_pos - 1))) { 
-        current_pos = this->LF(current_pos, c);
-        current_run = this->bwt.run_of_position(current_pos);
-        k++;
-        c = this->bwt[current_pos];
+        // Find the character at current_pos
+        auto c = this->bwt[pos];
+
+        // Traverse the BWT to find a subsampled run
+        ulint current_pos = this->LF(pos, c);
+        ulint current_run = this->bwt.run_of_position(current_pos);
+        size_t k = 1;
+
+        while (subsampled_start_samples_bv[current_run] == 0 ||
+            (current_pos != 0 && current_run == this->bwt.run_of_position(current_pos - 1))) { 
+            c = this->bwt[current_pos];
+            current_pos = this->LF(current_pos, c);
+            current_run = this->bwt.run_of_position(current_pos);
+            k++;
+        }
+
+        assert(k <= this->maxLF);
+
+        return this->samples_start[subsampled_start_samples_bv.rank(current_run)] + k;
     }
-
-    assert(k <= this->maxLF);
-
-    ulint result = this->samples_start[subsampled_start_samples_bv.rank(current_run)] + k;
-    return result;
-}
 
     /* serialize the structure to the ostream
      * \param out     the ostream
