@@ -780,7 +780,7 @@ ulint subsamples_last(const ulint run) {
     c = this->bwt[current_pos];
 
     while (subsampled_last_samples_bv[current_run] == 0 ||
-           (current_pos != n - 1 && c == this->bwt[current_pos + 1])) { // TODO: is there a more efficient way than querying the BWT?
+           (current_pos != n - 1 && current_run == this->bwt.run_of_position(current_pos + 1))) { // TODO: is there a more efficient way than querying the BWT?
         current_pos = this->LF(current_pos, c);
         current_run = this->bwt.run_of_position(current_pos);
         k++;
@@ -807,7 +807,6 @@ ulint subsamples_start(const ulint run) {
         return result;
     }
 
-    auto n = this->bwt_size();
     // Find the BWT position of the first character in this run
     // TODO, is this already present in the code?
     ulint current_pos = this->bwt.run_range(run).first;
@@ -822,7 +821,7 @@ ulint subsamples_start(const ulint run) {
     c = this->bwt[current_pos];
 
     while (subsampled_start_samples_bv[current_run] == 0 ||
-           (current_pos != 0 && c == this->bwt[current_pos - 1])) { // TODO: is there a more efficient way than querying the BWT?
+           (current_pos != 0 && current_run == this->bwt.run_of_position(current_pos - 1))) { 
         current_pos = this->LF(current_pos, c);
         current_run = this->bwt.run_of_position(current_pos);
         k++;
