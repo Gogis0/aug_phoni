@@ -114,7 +114,7 @@ void performSubSampling(const size_t &maxLF, const sdsl::int_vector<> &samples,
     uint64_t current_runIdx = samples_runIdx_sorted[i];
     uint64_t current_value = samples[current_runIdx];
 
-    if (current_value - last_subsampled_value > maxLF) {
+    if (current_value - last_subsampled_value >= maxLF) {
       subsampled_runIdxs.emplace_back(current_runIdx);
       last_subsampled_runIdx = current_runIdx;
       last_subsampled_value = current_value;
@@ -122,7 +122,7 @@ void performSubSampling(const size_t &maxLF, const sdsl::int_vector<> &samples,
   }
 
   r_prime = subsampled_runIdxs.size();
-  verbose("Maximum number of LF steps: " + std::to_string(maxLF));
+  verbose("Maximum number of LF steps between two samples: " + std::to_string(maxLF));
   verbose("r = " + std::to_string(r));
   verbose("r_prime = " + std::to_string(r_prime));
 

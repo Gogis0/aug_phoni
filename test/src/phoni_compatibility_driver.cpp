@@ -54,8 +54,8 @@ void run(const Args& args) {
 
   matchingstats ms;
   {
-    ifstream in(args.filename + ".phoni");
-    ms.load(in, args.filename);
+    ifstream in(args.filename + "." + to_string(args.maxLF) + ".phoni");
+    ms.load(in, args.filename, args.maxLF);
   }
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();

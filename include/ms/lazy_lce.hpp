@@ -732,7 +732,7 @@ public:
             k++;
         }
 
-        assert(k <= this->maxLF);
+        assert(k < this->maxLF);
 
         return this->samples_last[subsampled_last_samples_bv.rank(current_run)] + k;
     }
@@ -780,7 +780,7 @@ public:
             k++;
         }
 
-        assert(k <= this->maxLF);
+        assert(k < this->maxLF);
 
         return this->samples_start[subsampled_start_samples_bv.rank(current_run)] + k;
     }
@@ -816,7 +816,7 @@ public:
     /* load the structure from the istream
      * \param in the istream
      */
-    void load(std::istream &in, const std::string& filename, const size_t& _maxLF = 0)
+    void load(std::istream &in, const std::string& filename, const size_t& _maxLF)
     {
         this->maxLF = _maxLF;
         in.read((char *)&this->terminator_position, sizeof(this->terminator_position));
