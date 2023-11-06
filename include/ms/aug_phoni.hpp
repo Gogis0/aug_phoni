@@ -577,14 +577,14 @@ public:
         return _query(pattern.data(), m);
     }
 
-    std::pair<std::vector<size_t>, std::vector<size_t>> query(const char *pattern, const size_t m)
+    std::pair<std::vector<size_t>, std::vector<size_t>> query(const char *pattern, const size_t m, const size_t mem_size)
     {
-        return _query(pattern, m);
+        return _query(pattern, m, mem_size);
     }
 
     // Computes the matching statistics pointers for the given pattern
     template <typename string_t>
-    std::pair<std::vector<size_t>, std::vector<size_t>> _query(const string_t &pattern, const size_t m)
+    std::pair<std::vector<size_t>, std::vector<size_t>> _query(const string_t &pattern, const size_t m, const size_t mem_size)
     {
 
         auto pattern_at = [&] (const size_t pos) {
@@ -843,7 +843,16 @@ public:
 		cout << "Count lce: " << count_lce_total << std::endl;
 		cout << "Count lce skips: " << count_lce_skips << std::endl;
 		#endif
-        return std::make_pair(lens,refs);
+
+        std::vector<size_t> lens_new;
+        std::vector<size_t> refs_new;
+        for (int i = 0; i < m; i++) {
+            if (lens[i] >= mem_size) {
+                lens_new.push_back(lens[i]);
+                refs_new.push_back(refs[i]);
+            }
+        }
+        return std::make_pair(lens_new, refs_new);
     }
 
     /*
